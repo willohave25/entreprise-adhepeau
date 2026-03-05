@@ -928,10 +928,75 @@ p { margin-bottom: var(--spacing-sm); }
 /* ===========================================
    TÉMOIGNAGES
    =========================================== */
+/* Conteneur carrousel témoignages */
+.temoignages-carousel {
+  position: relative;
+  overflow: hidden;
+  padding: var(--spacing-sm) 0;
+}
+
 .temoignages-grid {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
   gap: var(--spacing-md);
+  transition: transform 0.6s ease;
+  will-change: transform;
+}
+
+.temoignages-grid .temoignage-card {
+  min-width: 100%;
+  flex-shrink: 0;
+}
+
+/* Boutons navigation carrousel */
+.carousel-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+}
+
+.carousel-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--or-primary);
+  background: transparent;
+  color: var(--or-primary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.carousel-btn:hover {
+  background: var(--or-primary);
+  color: var(--nuit-primary);
+}
+
+/* Points indicateurs carrousel */
+.carousel-dots {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.carousel-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--gris-clair);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition);
+  padding: 0;
+}
+
+.carousel-dot.active {
+  background: var(--or-primary);
+  transform: scale(1.3);
 }
 
 .temoignage-card {
@@ -1742,8 +1807,8 @@ p { margin-bottom: var(--spacing-sm); }
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .temoignages-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .temoignages-grid .temoignage-card {
+    min-width: calc(50% - 12px);
   }
 
   .services-grid {
@@ -1787,16 +1852,12 @@ p { margin-bottom: var(--spacing-sm); }
     grid-template-columns: repeat(3, 1fr);
   }
 
-  .temoignages-grid {
-    grid-template-columns: repeat(3, 1fr);
+  .temoignages-grid .temoignage-card {
+    min-width: calc(50% - 12px);
   }
 
   .services-grid {
     grid-template-columns: repeat(2, 1fr);
-  }
-
-  .about-grid {
-    grid-template-columns: 1fr 1fr;
   }
 
   .about-image img {
@@ -1871,8 +1932,8 @@ p { margin-bottom: var(--spacing-sm); }
     grid-template-columns: repeat(4, 1fr);
   }
 
-  .temoignages-grid {
-    grid-template-columns: repeat(3, 1fr);
+  .temoignages-grid .temoignage-card {
+    min-width: calc(33.333% - 16px);
   }
 
   .produits-liste {
