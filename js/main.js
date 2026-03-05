@@ -232,4 +232,123 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  /* --- Carrousel témoignages automatique --- */
+  var carouselContainer = document.querySelector('.temoignages-carousel');
+  var carouselGrid = document.querySelector('.temoignages-grid');
+
+  if (carouselContainer && carouselGrid) {
+    var cartes = carouselGrid.querySelectorAll('.temoignage-card');
+    var totalCartes = cartes.length;
+    var indexCarousel = 0;
+    var timerCarousel = null;
+    var delaiCarousel = 4000;
+
+    function cartesVisibles() {
+      var largeur = window.innerWidth;
+      if (largeur >= 1025) return 3;
+      if (largeur >= 481) return 2;
+      return 1;
+    }
+
+    /* Créer les contrôles */
+    var controlsDiv = document.createElement('div');
+    controlsDiv.className = 'carousel-controls';
+
+    var btnPrev = document.createElement('button');
+    btnPrev.className = 'carousel-btn';
+    btnPrev.innerHTML = '<i class="fas fa-chevron-left"></i>';
+    btnPrev.setAttribute('aria-label', 'Précédent');
+
+    var dotsDiv = document.createElement('div');
+    dotsDiv.className = 'carousel-dots';
+
+    var btnNext = document.createElement('button');
+    btnNext.className = 'carousel-btn';
+    btnNext.innerHTML = '<i class="fas fa-chevron-right"></i>';
+    btnNext.setAttribute('aria-label', 'Suivant');
+
+    controlsDiv.appendChild(btnPrev);
+    controlsDiv.appendChild(dotsDiv);
+    controlsDiv.appendChild(btnNext);
+    carouselContainer.appendChild(controlsDiv);
+
+    function creerDots() {
+      dotsDiv.innerHTML = '';
+      var nbSlides = Math.max(1, totalCartes - cartesVisibles() + 1);
+      for (var i = 0; i < nbSlides; i++) {
+        var dot = document.createElement('button');
+        dot.className = 'carousel-dot' + (i === 0 ? ' active' : '');
+        dot.setAttribute('aria-label', 'Témoignage ' + (i + 1));
+        dot.dataset.index = i;
+        dot.addEventListener('click', function () {
+          allerAuSlide(parseInt(this.dataset.index));
+        });
+        dotsDiv.appendChild(dot);
+      }
+    }
+
+    function allerAuSlide(index) {
+      var nbVisibles = cartesVisibles();
+      var maxIndex = Math.max(0, totalCartes - nbVisibles);
+      indexCarousel = Math.min(Math.max(0, index), maxIndex);
+
+      if (totalCartes > 0 && cartes[0]) {
+        var carteWidth = cartes[0].offsetWidth;
+        var gap = parseInt(window.getComputedStyle(carouselGrid).gap) || 24;
+        var offset = indexCarousel * (carteWidth + gap);
+        carouselGrid.style.transform = 'translateX(-' + offset + 'px)';
+      }
+
+      var dots = dotsDiv.querySelectorAll('.carousel-dot');
+      dots.forEach(function (d, i) {
+        d.classList.toggle('active', i === indexCarousel);
+      });
+
+      lancerAutoPlay();
+    }
+
+    function slideSuivant() {
+      var maxIndex = Math.max(0, totalCartes - cartesVisibles());
+      var prochain = indexCarousel + 1;
+      if (prochain > maxIndex) prochain = 0;
+      allerAuSlide(prochain);
+    }
+
+    function slidePrecedent() {
+      var maxIndex = Math.max(0, totalCartes - cartesVisibles());
+      var precedent = indexCarousel - 1;
+      if (precedent < 0) precedent = maxIndex;
+      allerAuSlide(precedent);
+    }
+
+    function lancerAutoPlay() {
+      clearInterval(timerCarousel);
+      timerCarousel = setInterval(slideSuivant, delaiCarousel);
+    }
+
+    btnNext.addEventListener('click', slideSuivant);
+    btnPrev.addEventListener('click', slidePrecedent);
+
+    carouselContainer.addEventListener('mouseenter', function () { clearInterval(timerCarousel); });
+    carouselContainer.addEventListener('mouseleave', lancerAutoPlay);
+
+    var touchStartX = 0;
+    carouselContainer.addEventListener('touchstart', function (e) {
+      touchStartX = e.touches[0].clientX;
+      clearInterval(timerCarousel);
+    }, { passive: true });
+    carouselContainer.addEventListener('touchend', function (e) {
+      var diff = touchStartX - e.changedTouches[0].clientX;
+      if (Math.abs(diff) > 50) {
+        if (diff > 0) slideSuivant(); else slidePrecedent();
+      }
+      lancerAutoPlay();
+    }, { passive: true });
+
+    window.addEventListener('resize', function () { creerDots(); allerAuSlide(indexCarousel); });
+
+    creerDots();
+    lancerAutoPlay();
+  }
+
 });
