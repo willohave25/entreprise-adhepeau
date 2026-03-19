@@ -224,6 +224,9 @@ p { margin-bottom: var(--spacing-sm); }
   height: 50px;
   width: auto;
   transition: height var(--transition);
+  background-color: #87CEEB;
+  border-radius: 8px;
+  padding: 4px;
 }
 
 .header.shrink .header-logo img {
@@ -425,6 +428,9 @@ p { margin-bottom: var(--spacing-sm); }
 
 .mobile-menu-header img {
   height: 40px;
+  background-color: #87CEEB;
+  border-radius: 8px;
+  padding: 3px;
 }
 
 .mobile-menu-close {
@@ -1591,6 +1597,9 @@ p { margin-bottom: var(--spacing-sm); }
 .footer-about img {
   height: 50px;
   margin-bottom: var(--spacing-sm);
+  background-color: #87CEEB;
+  border-radius: 8px;
+  padding: 4px;
 }
 
 .footer-links li {
