@@ -1,36 +1,39 @@
 /* ===========================================
-   W2K Auto-Scroll Premium V3
-   Défilement automatique vitrine digitale
-   Simple, fiable, production-ready
+   W2K Auto-Scroll V4 - Mode Salle d'Attente
+   Défilement continu lent de haut en bas
+   Puis page suivante, boucle infinie
+   Parfait pour écrans vitrine / salle d'attente
    W2K-Digital 2025
    =========================================== */
 
 var W2KAutoScroll = (function () {
   'use strict';
 
-  /* Configuration */
   var config = {
     speed: 'slow',
-    pauseDuration: 12,
-    inactivityDelay: 45,
+    pauseDuration: 3,
+    inactivityDelay: 30,
     showIndicator: true
   };
 
-  /* État */
-  var sections = [];
-  var indexActuel = 0;
+  /* Pixels par frame à ~60fps */
+  var vitesses = {
+    slow: 0.6,
+    medium: 1.2,
+    fast: 2.0
+  };
+
+  var animationId = null;
   var actif = false;
   var enPause = false;
-  var timerSection = null;
-  var timerInactivite = null;
-  var timerDemarrage = null;
   var indicateur = null;
+  var timerDemarrage = null;
+  var timerInactivite = null;
 
-  /* ========================================
-     INITIALISATION
-     ======================================== */
+  /* ======================================== */
+  /*  INITIALISATION                          */
+  /* ======================================== */
   function init(options) {
-    /* Fusionner les options */
     if (options) {
       if (options.speed) config.speed = options.speed;
       if (options.pauseDuration) config.pauseDuration = options.pauseDuration;
@@ -38,27 +41,18 @@ var W2KAutoScroll = (function () {
       if (typeof options.showIndicator !== 'undefined') config.showIndicator = options.showIndicator;
     }
 
-    /* Récupérer toutes les sections */
-    sections = document.querySelectorAll('[data-autoscroll]');
-    if (sections.length === 0) return;
-
-    /* Créer indicateur visuel */
-    if (config.showIndicator) {
-      creerIndicateur();
-    }
-
-    /* Écouter les interactions utilisateur */
+    if (config.showIndicator) creerIndicateur();
     ecouterInteractions();
 
-    /* Démarrer après 3 secondes */
+    /* Démarrer après un court délai */
     timerDemarrage = setTimeout(function () {
-      lancerAutoScroll();
-    }, 3000);
+      demarrer();
+    }, config.pauseDuration * 1000);
   }
 
-  /* ========================================
-     INDICATEUR VISUEL (point or pulsant)
-     ======================================== */
+  /* ======================================== */
+  /*  INDICATEUR VISUEL                       */
+  /* ======================================== */
   function creerIndicateur() {
     indicateur = document.createElement('div');
     indicateur.className = 'w2k-scroll-indicator';
@@ -66,7 +60,7 @@ var W2KAutoScroll = (function () {
     document.body.appendChild(indicateur);
   }
 
-  function mettreAJourIndicateur() {
+  function majIndicateur() {
     if (!indicateur) return;
     if (enPause) {
       indicateur.classList.add('paused');
@@ -75,216 +69,112 @@ var W2KAutoScroll = (function () {
     }
   }
 
-  /* ========================================
-     LANCER L'AUTO-SCROLL
-     ======================================== */
-  function lancerAutoScroll() {
+  /* ======================================== */
+  /*  DÉMARRER LE DÉFILEMENT CONTINU          */
+  /* ======================================== */
+  function demarrer() {
     actif = true;
     enPause = false;
-    mettreAJourIndicateur();
-
-    /* Trouver la section visible actuellement */
-    detecterSectionVisible();
-
-    /* Programmer le scroll vers la prochaine section */
-    programmerProchainScroll();
+    majIndicateur();
+    defiler();
   }
 
-  /* ========================================
-     PROGRAMMER LE PROCHAIN SCROLL
-     Attend pauseDuration secondes puis scrolle
-     ======================================== */
-  function programmerProchainScroll() {
+  /* ======================================== */
+  /*  BOUCLE DE DÉFILEMENT CONTINU            */
+  /*  Avance de X pixels chaque frame         */
+  /*  Arrivé en bas → page suivante           */
+  /* ======================================== */
+  function defiler() {
     if (!actif || enPause) return;
 
-    annulerTimers();
+    var vitesse = vitesses[config.speed] || vitesses.slow;
+    var maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    var posActuelle = window.pageYOffset;
 
-    timerSection = setTimeout(function () {
-      scrollerVersSuivant();
-    }, config.pauseDuration * 1000);
-  }
-
-  /* ========================================
-     SCROLLER VERS LA SECTION SUIVANTE
-     ======================================== */
-  function scrollerVersSuivant() {
-    if (!actif || enPause) return;
-
-    var prochainIndex = indexActuel + 1;
-
-    /* Toutes les sections sont parcourues */
-    if (prochainIndex >= sections.length) {
-      /* Rediriger vers la page suivante */
+    /* Arrivé tout en bas de la page */
+    if (posActuelle >= maxScroll - 1) {
+      /* Aller à la page suivante */
       var pageSuivante = document.body.getAttribute('data-next-page');
       if (pageSuivante) {
-        /* Pause avant la redirection */
-        timerSection = setTimeout(function () {
+        /* Petit délai avant de changer de page */
+        setTimeout(function () {
           if (actif && !enPause) {
             window.location.href = pageSuivante;
           }
-        }, config.pauseDuration * 1000);
-      } else {
-        /* Pas de page suivante, retour au début */
-        indexActuel = 0;
-        scrollerVersSection(0);
-      }
-      return;
-    }
-
-    /* Scroller vers la prochaine section */
-    indexActuel = prochainIndex;
-    scrollerVersSection(prochainIndex);
-  }
-
-  /* ========================================
-     SCROLLER VERS UNE SECTION SPÉCIFIQUE
-     Utilise scrollTo smooth natif du navigateur
-     ======================================== */
-  function scrollerVersSection(index) {
-    if (!actif || enPause) return;
-    if (index < 0 || index >= sections.length) return;
-
-    var cible = sections[index];
-    var headerEl = document.querySelector('.header');
-    var offsetHeader = headerEl ? headerEl.offsetHeight : 0;
-
-    /* Calculer la position de destination */
-    var rect = cible.getBoundingClientRect();
-    var destination = rect.top + window.pageYOffset - offsetHeader;
-
-    /* Scroll smooth natif */
-    window.scrollTo({
-      top: destination,
-      behavior: 'smooth'
-    });
-
-    /* Attendre que le scroll soit terminé puis programmer le suivant */
-    /* Le scroll smooth prend environ 500-1000ms selon la distance */
-    var distance = Math.abs(destination - window.pageYOffset);
-    var delaiScroll = Math.min(Math.max(distance * 0.5, 500), 2000);
-
-    setTimeout(function () {
-      if (actif && !enPause) {
-        programmerProchainScroll();
-      }
-    }, delaiScroll);
-  }
-
-  /* ========================================
-     DÉTECTER LA SECTION ACTUELLEMENT VISIBLE
-     ======================================== */
-  function detecterSectionVisible() {
-    var scrollY = window.pageYOffset || window.scrollY;
-    var milieu = scrollY + (window.innerHeight / 2);
-
-    for (var i = 0; i < sections.length; i++) {
-      var rect = sections[i].getBoundingClientRect();
-      var haut = rect.top + scrollY;
-      var bas = haut + rect.height;
-
-      if (milieu >= haut && milieu < bas) {
-        indexActuel = i;
+        }, 2000);
         return;
+      } else {
+        /* Pas de page suivante, retour en haut */
+        window.scrollTo(0, 0);
       }
     }
 
-    /* Par défaut, première section */
-    indexActuel = 0;
+    /* Avancer de quelques pixels */
+    window.scrollTo(0, posActuelle + vitesse);
+
+    /* Prochaine frame */
+    animationId = requestAnimationFrame(defiler);
   }
 
-  /* ========================================
-     METTRE EN PAUSE (interaction utilisateur)
-     ======================================== */
+  /* ======================================== */
+  /*  PAUSE / REPRISE                         */
+  /* ======================================== */
   function mettreEnPause() {
     if (!actif) return;
-    if (enPause) {
-      /* Déjà en pause, relancer le timer inactivité */
-      relancerTimerInactivite();
-      return;
-    }
-
     enPause = true;
-    mettreAJourIndicateur();
-    annulerTimers();
+    majIndicateur();
+    cancelAnimationFrame(animationId);
 
     /* Reprendre après inactivité */
-    relancerTimerInactivite();
-  }
-
-  function relancerTimerInactivite() {
     clearTimeout(timerInactivite);
     timerInactivite = setTimeout(function () {
       reprendre();
     }, config.inactivityDelay * 1000);
   }
 
-  /* ========================================
-     REPRENDRE APRÈS INACTIVITÉ
-     ======================================== */
   function reprendre() {
-    if (!actif || !enPause) return;
-
+    if (!actif) return;
     enPause = false;
-    mettreAJourIndicateur();
-
-    /* Recalculer la position */
-    detecterSectionVisible();
-
-    /* Reprendre le défilement */
-    programmerProchainScroll();
+    majIndicateur();
+    defiler();
   }
 
-  /* ========================================
-     ANNULER TOUS LES TIMERS
-     ======================================== */
-  function annulerTimers() {
-    clearTimeout(timerSection);
-    clearTimeout(timerInactivite);
-  }
-
-  /* ========================================
-     ÉCOUTER LES INTERACTIONS UTILISATEUR
-     wheel, touchstart, mousedown, keydown
-     ======================================== */
+  /* ======================================== */
+  /*  ÉCOUTER LES INTERACTIONS                */
+  /*  Touch/clic/molette → pause              */
+  /*  Inactivité 30s → reprise               */
+  /* ======================================== */
   function ecouterInteractions() {
 
-    /* Molette souris */
-    document.addEventListener('wheel', function () {
-      if (actif) mettreEnPause();
-    }, { passive: true });
-
-    /* Touch écran */
-    document.addEventListener('touchstart', function () {
-      if (actif) mettreEnPause();
-    }, { passive: true });
-
-    /* Clic souris (pas sur les liens de navigation) */
-    document.addEventListener('mousedown', function (e) {
+    var gerer = function () {
       if (!actif) return;
-      /* Ignorer les clics sur les liens et boutons */
-      if (e.target.closest('a') || e.target.closest('button')) return;
-      if (indicateur && indicateur.contains(e.target)) return;
-      mettreEnPause();
-    }, { passive: true });
-
-    /* Clavier */
-    document.addEventListener('keydown', function (e) {
-      /* Flèches, espace, page up/down */
-      var touches = [32, 33, 34, 35, 36, 37, 38, 39, 40];
-      if (touches.indexOf(e.keyCode) !== -1) {
-        if (actif) mettreEnPause();
+      if (enPause) {
+        /* Déjà en pause, relancer le timer */
+        clearTimeout(timerInactivite);
+        timerInactivite = setTimeout(function () {
+          reprendre();
+        }, config.inactivityDelay * 1000);
+      } else {
+        mettreEnPause();
       }
+    };
+
+    document.addEventListener('wheel', gerer, { passive: true });
+    document.addEventListener('touchstart', gerer, { passive: true });
+    document.addEventListener('keydown', gerer, { passive: true });
+    document.addEventListener('mousedown', function (e) {
+      /* Laisser les liens fonctionner normalement */
+      if (e.target.closest('a') || e.target.closest('button')) return;
+      gerer();
     }, { passive: true });
   }
 
-  /* ========================================
-     API PUBLIQUE
-     ======================================== */
+  /* API publique */
   return {
     init: init,
     pause: mettreEnPause,
     reprendre: reprendre,
-    demarrer: lancerAutoScroll
+    demarrer: demarrer
   };
 
 })();
