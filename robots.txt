@@ -1,7 +1,3 @@
 User-agent: *
 Allow: /
-Sitemap: https://www.entrepriseadhepeau.com/sitemap.xml
-
-# Interdire accès aux dossiers internes
-Disallow: /css/
-Disallow: /js/
+Sitemap: https://entrepriseadhepeau.com/sitemap.xml
