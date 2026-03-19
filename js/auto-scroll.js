@@ -1,13 +1,14 @@
 /* ===========================================
-   W2K Auto-Scroll Premium Module V2
-   Défilement lent continu type vitrine digitale
-   Scroll progressif section par section
+   W2K Auto-Scroll Premium V3
+   Défilement automatique vitrine digitale
+   Simple, fiable, production-ready
    W2K-Digital 2025
    =========================================== */
 
 var W2KAutoScroll = (function () {
   'use strict';
 
+  /* Configuration */
   var config = {
     speed: 'slow',
     pauseDuration: 12,
@@ -15,309 +16,275 @@ var W2KAutoScroll = (function () {
     showIndicator: true
   };
 
-  var etat = {
-    actif: false,
-    enPause: false,
-    scrollEnCours: false,
-    sections: [],
-    indexActuel: -1,
-    timerPause: null,
-    timerInactivite: null,
-    timerDemarrage: null,
-    animationId: null,
-    indicateur: null,
-    estNotreScroll: false
-  };
+  /* État */
+  var sections = [];
+  var indexActuel = 0;
+  var actif = false;
+  var enPause = false;
+  var timerSection = null;
+  var timerInactivite = null;
+  var timerDemarrage = null;
+  var indicateur = null;
 
-  /* Vitesse en pixels par frame (~60fps) */
-  var vitesses = {
-    slow: 0.8,
-    medium: 1.5,
-    fast: 2.5
-  };
-
-  /* --- Initialisation --- */
+  /* ========================================
+     INITIALISATION
+     ======================================== */
   function init(options) {
+    /* Fusionner les options */
     if (options) {
-      for (var cle in options) {
-        if (options.hasOwnProperty(cle)) {
-          config[cle] = options[cle];
-        }
-      }
+      if (options.speed) config.speed = options.speed;
+      if (options.pauseDuration) config.pauseDuration = options.pauseDuration;
+      if (options.inactivityDelay) config.inactivityDelay = options.inactivityDelay;
+      if (typeof options.showIndicator !== 'undefined') config.showIndicator = options.showIndicator;
     }
 
-    etat.sections = document.querySelectorAll('[data-autoscroll]');
-    if (etat.sections.length === 0) return;
+    /* Récupérer toutes les sections */
+    sections = document.querySelectorAll('[data-autoscroll]');
+    if (sections.length === 0) return;
 
-    if (config.showIndicator) creerIndicateur();
-    ajouterEcouteurs();
+    /* Créer indicateur visuel */
+    if (config.showIndicator) {
+      creerIndicateur();
+    }
 
-    /* Démarrage après 3 secondes */
-    etat.timerDemarrage = setTimeout(function () {
-      demarrer();
+    /* Écouter les interactions utilisateur */
+    ecouterInteractions();
+
+    /* Démarrer après 3 secondes */
+    timerDemarrage = setTimeout(function () {
+      lancerAutoScroll();
     }, 3000);
   }
 
-  /* --- Indicateur visuel (point or pulsant) --- */
+  /* ========================================
+     INDICATEUR VISUEL (point or pulsant)
+     ======================================== */
   function creerIndicateur() {
-    etat.indicateur = document.createElement('div');
-    etat.indicateur.className = 'w2k-scroll-indicator';
-    etat.indicateur.setAttribute('aria-hidden', 'true');
-    etat.indicateur.title = 'Défilement automatique actif';
-    document.body.appendChild(etat.indicateur);
+    indicateur = document.createElement('div');
+    indicateur.className = 'w2k-scroll-indicator';
+    indicateur.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(indicateur);
   }
 
-  function majIndicateur(pause) {
-    if (!etat.indicateur) return;
-    if (pause) {
-      etat.indicateur.classList.add('paused');
-      etat.indicateur.title = 'Défilement en pause';
+  function mettreAJourIndicateur() {
+    if (!indicateur) return;
+    if (enPause) {
+      indicateur.classList.add('paused');
     } else {
-      etat.indicateur.classList.remove('paused');
-      etat.indicateur.title = 'Défilement automatique actif';
+      indicateur.classList.remove('paused');
     }
   }
 
-  /* --- Démarrer --- */
-  function demarrer() {
-    etat.actif = true;
-    etat.enPause = false;
-    majIndicateur(false);
+  /* ========================================
+     LANCER L'AUTO-SCROLL
+     ======================================== */
+  function lancerAutoScroll() {
+    actif = true;
+    enPause = false;
+    mettreAJourIndicateur();
 
-    /* Trouver dans quelle section on se trouve */
-    trouverSectionActuelle();
+    /* Trouver la section visible actuellement */
+    detecterSectionVisible();
 
-    /* Pause sur la section actuelle puis défiler */
-    planifierProchainScroll();
+    /* Programmer le scroll vers la prochaine section */
+    programmerProchainScroll();
   }
 
-  /* --- Planifier le prochain défilement après la pause --- */
-  function planifierProchainScroll() {
-    if (!etat.actif || etat.enPause) return;
+  /* ========================================
+     PROGRAMMER LE PROCHAIN SCROLL
+     Attend pauseDuration secondes puis scrolle
+     ======================================== */
+  function programmerProchainScroll() {
+    if (!actif || enPause) return;
 
-    clearTimeout(etat.timerPause);
-    etat.timerPause = setTimeout(function () {
-      allerSectionSuivante();
+    annulerTimers();
+
+    timerSection = setTimeout(function () {
+      scrollerVersSuivant();
     }, config.pauseDuration * 1000);
   }
 
-  /* --- Aller à la section suivante --- */
-  function allerSectionSuivante() {
-    if (!etat.actif || etat.enPause) return;
+  /* ========================================
+     SCROLLER VERS LA SECTION SUIVANTE
+     ======================================== */
+  function scrollerVersSuivant() {
+    if (!actif || enPause) return;
 
-    var prochainIndex = etat.indexActuel + 1;
+    var prochainIndex = indexActuel + 1;
 
-    /* Dernière section atteinte */
-    if (prochainIndex >= etat.sections.length) {
+    /* Toutes les sections sont parcourues */
+    if (prochainIndex >= sections.length) {
+      /* Rediriger vers la page suivante */
       var pageSuivante = document.body.getAttribute('data-next-page');
       if (pageSuivante) {
-        /* Scroller lentement jusqu'au bas absolu de la page */
-        var maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-        var posActuelle = window.scrollY;
-
-        if (maxScroll - posActuelle > 10) {
-          /* Il reste du contenu en bas (footer etc), scroller doucement */
-          defilementLent(maxScroll, function () {
-            /* Pause en bas puis redirection */
-            etat.timerPause = setTimeout(function () {
-              if (etat.actif && !etat.enPause) {
-                window.location.href = pageSuivante;
-              }
-            }, config.pauseDuration * 1000);
-          });
-        } else {
-          /* Déjà tout en bas, redirection après pause */
-          etat.timerPause = setTimeout(function () {
-            if (etat.actif && !etat.enPause) {
-              window.location.href = pageSuivante;
-            }
-          }, config.pauseDuration * 1000);
-        }
-        return;
+        /* Pause avant la redirection */
+        timerSection = setTimeout(function () {
+          if (actif && !enPause) {
+            window.location.href = pageSuivante;
+          }
+        }, config.pauseDuration * 1000);
       } else {
-        /* Boucle : retour en haut */
-        prochainIndex = 0;
-        etat.estNotreScroll = true;
-        window.scrollTo(0, 0);
-        etat.estNotreScroll = false;
-        etat.indexActuel = 0;
-        planifierProchainScroll();
-        return;
+        /* Pas de page suivante, retour au début */
+        indexActuel = 0;
+        scrollerVersSection(0);
       }
+      return;
     }
 
-    /* Calculer la destination (haut de la section - hauteur header) */
-    var cible = etat.sections[prochainIndex];
+    /* Scroller vers la prochaine section */
+    indexActuel = prochainIndex;
+    scrollerVersSection(prochainIndex);
+  }
+
+  /* ========================================
+     SCROLLER VERS UNE SECTION SPÉCIFIQUE
+     Utilise scrollTo smooth natif du navigateur
+     ======================================== */
+  function scrollerVersSection(index) {
+    if (!actif || enPause) return;
+    if (index < 0 || index >= sections.length) return;
+
+    var cible = sections[index];
     var headerEl = document.querySelector('.header');
     var offsetHeader = headerEl ? headerEl.offsetHeight : 0;
-    var destination = cible.getBoundingClientRect().top + window.scrollY - offsetHeader;
 
-    /* Mettre à jour l'index */
-    etat.indexActuel = prochainIndex;
+    /* Calculer la position de destination */
+    var rect = cible.getBoundingClientRect();
+    var destination = rect.top + window.pageYOffset - offsetHeader;
 
-    /* Défilement lent pixel par pixel */
-    defilementLent(destination, function () {
-      /* Section atteinte, pause puis continuer */
-      if (etat.actif && !etat.enPause) {
-        planifierProchainScroll();
-      }
+    /* Scroll smooth natif */
+    window.scrollTo({
+      top: destination,
+      behavior: 'smooth'
     });
+
+    /* Attendre que le scroll soit terminé puis programmer le suivant */
+    /* Le scroll smooth prend environ 500-1000ms selon la distance */
+    var distance = Math.abs(destination - window.pageYOffset);
+    var delaiScroll = Math.min(Math.max(distance * 0.5, 500), 2000);
+
+    setTimeout(function () {
+      if (actif && !enPause) {
+        programmerProchainScroll();
+      }
+    }, delaiScroll);
   }
 
-  /* --- Défilement lent pixel par pixel (effet vitrine) --- */
-  function defilementLent(destination, callback) {
-    etat.scrollEnCours = true;
-    var vitesse = vitesses[config.speed] || vitesses.slow;
+  /* ========================================
+     DÉTECTER LA SECTION ACTUELLEMENT VISIBLE
+     ======================================== */
+  function detecterSectionVisible() {
+    var scrollY = window.pageYOffset || window.scrollY;
+    var milieu = scrollY + (window.innerHeight / 2);
 
-    function boucle() {
-      if (!etat.actif || etat.enPause) {
-        etat.scrollEnCours = false;
-        return;
-      }
+    for (var i = 0; i < sections.length; i++) {
+      var rect = sections[i].getBoundingClientRect();
+      var haut = rect.top + scrollY;
+      var bas = haut + rect.height;
 
-      var posActuelle = window.scrollY;
-      var distance = destination - posActuelle;
-
-      /* Arrivé à destination */
-      if (Math.abs(distance) < 2) {
-        etat.estNotreScroll = true;
-        window.scrollTo(0, destination);
-        etat.estNotreScroll = false;
-        etat.scrollEnCours = false;
-        if (callback) callback();
-        return;
-      }
-
-      /* Vitesse adaptative : légèrement plus rapide si grande distance */
-      var pas;
-      if (Math.abs(distance) > 800) {
-        pas = vitesse * 3;
-      } else if (Math.abs(distance) > 400) {
-        pas = vitesse * 2;
-      } else if (Math.abs(distance) > 100) {
-        pas = vitesse * 1.5;
-      } else {
-        /* Ralentir à l'approche pour un effet doux */
-        pas = vitesse * 0.8;
-      }
-
-      /* Direction */
-      var direction = distance > 0 ? 1 : -1;
-      var nouvPos = posActuelle + (pas * direction);
-
-      /* Ne pas dépasser */
-      if (direction > 0 && nouvPos > destination) nouvPos = destination;
-      if (direction < 0 && nouvPos < destination) nouvPos = destination;
-
-      etat.estNotreScroll = true;
-      window.scrollTo(0, nouvPos);
-      etat.estNotreScroll = false;
-
-      etat.animationId = requestAnimationFrame(boucle);
-    }
-
-    etat.animationId = requestAnimationFrame(boucle);
-  }
-
-  /* --- Trouver la section visible actuellement --- */
-  function trouverSectionActuelle() {
-    var scrollY = window.scrollY;
-    var hauteurVue = window.innerHeight;
-    var milieu = scrollY + hauteurVue / 2;
-
-    etat.indexActuel = 0;
-
-    for (var i = 0; i < etat.sections.length; i++) {
-      var rect = etat.sections[i].getBoundingClientRect();
-      var topAbsolu = rect.top + scrollY;
-      var bottomAbsolu = topAbsolu + rect.height;
-
-      if (milieu >= topAbsolu && milieu < bottomAbsolu) {
-        etat.indexActuel = i;
+      if (milieu >= haut && milieu < bas) {
+        indexActuel = i;
         return;
       }
     }
+
+    /* Par défaut, première section */
+    indexActuel = 0;
   }
 
-  /* --- Pause immédiate --- */
-  function pause() {
-    etat.enPause = true;
-    etat.actif = false;
-    etat.scrollEnCours = false;
-    majIndicateur(true);
+  /* ========================================
+     METTRE EN PAUSE (interaction utilisateur)
+     ======================================== */
+  function mettreEnPause() {
+    if (!actif) return;
+    if (enPause) {
+      /* Déjà en pause, relancer le timer inactivité */
+      relancerTimerInactivite();
+      return;
+    }
 
-    clearTimeout(etat.timerPause);
-    cancelAnimationFrame(etat.animationId);
+    enPause = true;
+    mettreAJourIndicateur();
+    annulerTimers();
 
-    /* Timer inactivité pour reprendre automatiquement */
-    clearTimeout(etat.timerInactivite);
-    etat.timerInactivite = setTimeout(function () {
+    /* Reprendre après inactivité */
+    relancerTimerInactivite();
+  }
+
+  function relancerTimerInactivite() {
+    clearTimeout(timerInactivite);
+    timerInactivite = setTimeout(function () {
       reprendre();
     }, config.inactivityDelay * 1000);
   }
 
-  /* --- Reprendre après inactivité --- */
+  /* ========================================
+     REPRENDRE APRÈS INACTIVITÉ
+     ======================================== */
   function reprendre() {
-    if (!etat.enPause) return;
-    etat.enPause = false;
-    etat.actif = true;
-    majIndicateur(false);
+    if (!actif || !enPause) return;
 
-    /* Recalculer position */
-    trouverSectionActuelle();
-    planifierProchainScroll();
+    enPause = false;
+    mettreAJourIndicateur();
+
+    /* Recalculer la position */
+    detecterSectionVisible();
+
+    /* Reprendre le défilement */
+    programmerProchainScroll();
   }
 
-  /* --- Gérer une interaction utilisateur --- */
-  function gererInteraction() {
-    if (etat.actif && !etat.enPause) {
-      pause();
-    } else if (etat.enPause) {
-      /* Relancer le compteur d'inactivité */
-      clearTimeout(etat.timerInactivite);
-      etat.timerInactivite = setTimeout(function () {
-        reprendre();
-      }, config.inactivityDelay * 1000);
-    }
+  /* ========================================
+     ANNULER TOUS LES TIMERS
+     ======================================== */
+  function annulerTimers() {
+    clearTimeout(timerSection);
+    clearTimeout(timerInactivite);
   }
 
-  /* --- Écouter les interactions utilisateur --- */
-  function ajouterEcouteurs() {
+  /* ========================================
+     ÉCOUTER LES INTERACTIONS UTILISATEUR
+     wheel, touchstart, mousedown, keydown
+     ======================================== */
+  function ecouterInteractions() {
 
-    /* Touch et clavier */
-    ['touchstart', 'keydown'].forEach(function (evt) {
-      document.addEventListener(evt, function () {
-        gererInteraction();
-      }, { passive: true });
-    });
-
-    /* Clic : ne pas pauser sur les liens/boutons de nav */
-    document.addEventListener('click', function (e) {
-      if (etat.indicateur && etat.indicateur.contains(e.target)) return;
-      if (e.target.closest('a') || e.target.closest('button')) return;
-      gererInteraction();
-    }, { passive: true });
-
-    /* Molette souris → l'utilisateur veut scroller lui-même */
+    /* Molette souris */
     document.addEventListener('wheel', function () {
-      gererInteraction();
+      if (actif) mettreEnPause();
     }, { passive: true });
 
-    /* Détection scroll manuel (pas notre auto-scroll) */
-    window.addEventListener('scroll', function () {
-      if (etat.estNotreScroll) return;
-      if (etat.actif && !etat.enPause && etat.scrollEnCours) {
-        pause();
+    /* Touch écran */
+    document.addEventListener('touchstart', function () {
+      if (actif) mettreEnPause();
+    }, { passive: true });
+
+    /* Clic souris (pas sur les liens de navigation) */
+    document.addEventListener('mousedown', function (e) {
+      if (!actif) return;
+      /* Ignorer les clics sur les liens et boutons */
+      if (e.target.closest('a') || e.target.closest('button')) return;
+      if (indicateur && indicateur.contains(e.target)) return;
+      mettreEnPause();
+    }, { passive: true });
+
+    /* Clavier */
+    document.addEventListener('keydown', function (e) {
+      /* Flèches, espace, page up/down */
+      var touches = [32, 33, 34, 35, 36, 37, 38, 39, 40];
+      if (touches.indexOf(e.keyCode) !== -1) {
+        if (actif) mettreEnPause();
       }
     }, { passive: true });
   }
 
-  /* --- API publique --- */
+  /* ========================================
+     API PUBLIQUE
+     ======================================== */
   return {
     init: init,
-    pause: pause,
+    pause: mettreEnPause,
     reprendre: reprendre,
-    demarrer: demarrer
+    demarrer: lancerAutoScroll
   };
 
 })();
